@@ -5,17 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Encrusted - Web Player</title>
     <style>
+        :root {
+            --green: #00ff00;
+            --dim-green: #0f5f0f;
+            --panel: #111;
+            --panel-2: #061006;
+            --blue: #66ccff;
+            --yellow: #ffff66;
+            --red: #ff4444;
+            --muted: #888;
+        }
+        * { box-sizing: border-box; }
         body {
             font-family: 'Courier New', monospace;
             background: #0a0a0a;
-            color: #00ff00;
+            color: var(--green);
             margin: 0;
             padding: 20px;
             line-height: 1.4;
         }
+        .header { text-align: center; margin-bottom: 20px; }
+        .status { color: var(--muted); font-size: 0.9em; }
+        .shell {
+            display: grid;
+            grid-template-columns: minmax(360px, 1fr) minmax(320px, 42vw);
+            gap: 14px;
+            align-items: start;
+        }
+        .left-column, .right-column {
+            min-width: 0;
+        }
         #output {
-            background: #111;
-            border: 1px solid #00ff00;
+            background: var(--panel);
+            border: 1px solid var(--green);
             padding: 20px;
             min-height: 400px;
             max-height: 60vh;
@@ -23,29 +45,123 @@
             white-space: normal;
             margin-bottom: 10px;
         }
-        #input, #story {
-            background: #111;
-            border: 1px solid #00ff00;
-            color: #00ff00;
+        #input, #story, button {
+            background: var(--panel);
+            border: 1px solid var(--green);
+            color: var(--green);
             padding: 10px;
             font-family: 'Courier New', monospace;
             font-size: 16px;
             margin: 4px 0;
         }
-        #input { width: 100%; box-sizing: border-box; }
-        .header { text-align: center; margin-bottom: 20px; }
-        .status { color: #888; font-size: 0.9em; }
-        .error { color: #ff4444; }
-        .debug { color: #888; }
-        .object { color: #66ccff; }
-        .room { color: #ffff66; font-weight: bold; }
+        button { cursor: pointer; }
+        button:hover { background: var(--panel-2); }
+        #input { width: 100%; }
+        .error { color: var(--red); }
+        .debug { color: var(--muted); }
+        .object { color: var(--blue); }
+        .room { color: var(--yellow); font-weight: bold; }
         #statusbar {
             display: flex;
             justify-content: space-between;
-            border: 1px solid #00ff00;
+            border: 1px solid var(--green);
             border-bottom: 0;
             padding: 6px 10px;
-            background: #061006;
+            background: var(--panel-2);
+        }
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--green);
+            margin-bottom: 14px;
+        }
+        .panel h2 {
+            margin: 0;
+            padding: 8px 10px;
+            font-size: 16px;
+            color: var(--yellow);
+            border-bottom: 1px solid var(--dim-green);
+            background: var(--panel-2);
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .panel-body { padding: 10px; }
+        #map-current-room {
+            color: var(--yellow);
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        #map-canvas {
+            position: relative;
+            min-height: 300px;
+            overflow: auto;
+            border: 1px dashed var(--dim-green);
+            background:
+                linear-gradient(rgba(0,255,0,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,255,0,0.03) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        #map-rooms {
+            position: relative;
+            min-width: 700px;
+            min-height: 500px;
+        }
+        #map-lines {
+            position: absolute;
+            inset: 0;
+            min-width: 700px;
+            min-height: 500px;
+            pointer-events: none;
+        }
+        .map-line {
+            position: absolute;
+            height: 2px;
+            background: var(--dim-green);
+            transform-origin: 0 50%;
+            box-shadow: 0 0 5px rgba(0,255,0,0.25);
+        }
+        .map-room {
+            position: absolute;
+            width: 132px;
+            min-height: 42px;
+            transform: translate(-50%, -50%);
+            border: 1px solid var(--dim-green);
+            background: #071107;
+            color: var(--green);
+            padding: 6px;
+            text-align: center;
+            font-size: 12px;
+            white-space: normal;
+        }
+        .map-room.current {
+            border-color: var(--yellow);
+            color: var(--yellow);
+            box-shadow: 0 0 10px rgba(255,255,102,0.35);
+        }
+        .map-room .room-id { color: var(--muted); font-size: 10px; }
+        #map-edges {
+            margin-top: 10px;
+            color: var(--muted);
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        #map-edges ul, #object-tree ul {
+            margin: 4px 0 4px 18px;
+            padding: 0;
+        }
+        #map-edges li { margin: 2px 0; }
+        #object-tree {
+            max-height: 42vh;
+            overflow: auto;
+            color: var(--blue);
+        }
+        #object-tree li { margin: 2px 0; }
+        #object-tree .object-number { color: var(--muted); }
+        .empty-state { color: var(--muted); font-style: italic; }
+        @media (max-width: 900px) {
+            body { padding: 10px; }
+            .shell { grid-template-columns: 1fr; }
+            #output { max-height: 45vh; }
         }
     </style>
 </head>
@@ -56,9 +172,35 @@
     </div>
 
     <label>Story file (.z3/.z4/.z5/.z8): <input type="file" id="story" accept=".z3,.z4,.z5,.z8,.zblorb,.dat"></label>
-    <div id="statusbar"><span id="status-left"></span><span id="status-right"></span></div>
-    <div id="output">Loading WebAssembly module...</div>
-    <input type="text" id="input" placeholder="Load a story file, then type commands here..." disabled>
+
+    <div class="shell">
+        <main class="left-column">
+            <div id="statusbar"><span id="status-left"></span><span id="status-right"></span></div>
+            <div id="output">Loading WebAssembly module...</div>
+            <input type="text" id="input" placeholder="Load a story file, then type commands here..." disabled>
+        </main>
+
+        <aside class="right-column" aria-label="Live story tools">
+            <section id="map-panel" class="panel">
+                <h2><span>Live story map</span><button id="map-clear" type="button" title="Keep the current room but clear discovered paths">clear</button></h2>
+                <div class="panel-body">
+                    <div id="map-current-room" class="empty-state">No room data yet.</div>
+                    <div id="map-canvas" aria-label="Discovered rooms">
+                        <div id="map-lines"></div>
+                        <div id="map-rooms"></div>
+                    </div>
+                    <div id="map-edges" aria-label="Discovered exits"><span class="empty-state">Move around to discover exits.</span></div>
+                </div>
+            </section>
+
+            <section id="tree-panel" class="panel">
+                <h2><span>Object tree</span></h2>
+                <div class="panel-body">
+                    <div id="object-tree" class="empty-state">No object data yet.</div>
+                </div>
+            </section>
+        </aside>
+    </div>
 
     <script type="module">
         const output = document.getElementById('output');
@@ -66,10 +208,43 @@
         const story = document.getElementById('story');
         const statusLeft = document.getElementById('status-left');
         const statusRight = document.getElementById('status-right');
+        const mapCurrentRoom = document.getElementById('map-current-room');
+        const mapRooms = document.getElementById('map-rooms');
+        const mapEdges = document.getElementById('map-edges');
+        const mapLines = document.getElementById('map-lines');
+        const mapClear = document.getElementById('map-clear');
+        const objectTree = document.getElementById('object-tree');
 
         let wasm = null;
         let memory = null;
         let running = false;
+        let lastCommand = '';
+
+        const DIRECTIONS = {
+            n: 'north', north: 'north',
+            s: 'south', south: 'south',
+            e: 'east', east: 'east',
+            w: 'west', west: 'west',
+            ne: 'northeast', northeast: 'northeast', northe: 'northeast',
+            nw: 'northwest', northwest: 'northwest', northw: 'northwest',
+            se: 'southeast', southeast: 'southeast', southe: 'southeast',
+            sw: 'southwest', southwest: 'southwest', southw: 'southwest',
+            u: 'up', up: 'up', climb: 'up',
+            d: 'down', down: 'down',
+            in: 'in', inside: 'in', enter: 'in',
+            out: 'out', outside: 'out', exit: 'out',
+        };
+        const OFFSETS = {
+            north: [0, -120], south: [0, 120], east: [170, 0], west: [-170, 0],
+            northeast: [170, -120], northwest: [-170, -120], southeast: [170, 120], southwest: [-170, 120],
+            up: [-220, -220], down: [220, 220], in: [120, 70], out: [-120, -70],
+        };
+
+        const graph = {
+            rooms: new Map(),
+            edges: new Map(),
+            current: null,
+        };
 
         function appendLine(text, className = '') {
             const line = document.createElement('div');
@@ -100,6 +275,184 @@
             return [ptr, encoded.length];
         }
 
+        function parseDirection(command = '') {
+            const words = command.toLowerCase().split(/\s+|\.|,|and/).filter(Boolean);
+            for (const word of words) {
+                if (DIRECTIONS[word]) return DIRECTIONS[word];
+            }
+            return '';
+        }
+
+        function addRoom(id, name, direction = '') {
+            if (graph.rooms.has(id)) return graph.rooms.get(id);
+
+            let x = 350;
+            let y = 250;
+            if (graph.current && OFFSETS[direction]) {
+                x = graph.current.x + OFFSETS[direction][0];
+                y = graph.current.y + OFFSETS[direction][1];
+            } else if (graph.current) {
+                x = graph.current.x + 150;
+                y = graph.current.y + 80;
+            }
+
+            const room = { id, name, x, y };
+            graph.rooms.set(id, room);
+            return room;
+        }
+
+        function addEdge(from, to, direction) {
+            if (!from || !to || !direction || from.id === to.id) return;
+            const key = `${from.id}->${to.id}`;
+            const reverseKey = `${to.id}->${from.id}`;
+            const existing = graph.edges.get(key) || graph.edges.get(reverseKey);
+            if (existing) {
+                if (!existing.directions.includes(direction)) existing.directions.push(direction);
+                return;
+            }
+            graph.edges.set(key, { from: from.id, to: to.id, directions: [direction] });
+        }
+
+        function renderMap() {
+            if (!graph.current) {
+                mapCurrentRoom.textContent = 'No room data yet.';
+                mapCurrentRoom.className = 'empty-state';
+                mapRooms.textContent = '';
+                mapLines.textContent = '';
+                mapEdges.innerHTML = '<span class="empty-state">Move around to discover exits.</span>';
+                return;
+            }
+
+            mapCurrentRoom.className = '';
+            mapCurrentRoom.textContent = `${graph.current.name} (#${graph.current.id})`;
+            mapRooms.textContent = '';
+            mapLines.textContent = '';
+
+            const rooms = [...graph.rooms.values()];
+            const minX = Math.min(...rooms.map(room => room.x), 0);
+            const minY = Math.min(...rooms.map(room => room.y), 0);
+            const shiftX = minX < 80 ? 80 - minX : 0;
+            const shiftY = minY < 80 ? 80 - minY : 0;
+
+            for (const room of rooms) {
+                const el = document.createElement('div');
+                el.className = `map-room${graph.current.id === room.id ? ' current' : ''}`;
+                el.style.left = `${room.x + shiftX}px`;
+                el.style.top = `${room.y + shiftY}px`;
+
+                const name = document.createElement('div');
+                name.textContent = room.name;
+                const number = document.createElement('div');
+                number.className = 'room-id';
+                number.textContent = `#${room.id}`;
+                el.appendChild(name);
+                el.appendChild(number);
+                mapRooms.appendChild(el);
+            }
+
+            const edgeList = [...graph.edges.values()];
+            for (const edge of edgeList) {
+                const from = graph.rooms.get(edge.from);
+                const to = graph.rooms.get(edge.to);
+                if (!from || !to) continue;
+                const x1 = from.x + shiftX;
+                const y1 = from.y + shiftY;
+                const x2 = to.x + shiftX;
+                const y2 = to.y + shiftY;
+                const length = Math.hypot(x2 - x1, y2 - y1);
+                const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+                const line = document.createElement('div');
+                line.className = 'map-line';
+                line.style.left = `${x1}px`;
+                line.style.top = `${y1}px`;
+                line.style.width = `${length}px`;
+                line.style.transform = `rotate(${angle}deg)`;
+                mapLines.appendChild(line);
+            }
+
+            if (!edgeList.length) {
+                mapEdges.innerHTML = '<span class="empty-state">No exits discovered yet.</span>';
+                return;
+            }
+
+            mapEdges.textContent = '';
+            const ul = document.createElement('ul');
+            for (const edge of edgeList) {
+                const from = graph.rooms.get(edge.from);
+                const to = graph.rooms.get(edge.to);
+                if (!from || !to) continue;
+                const li = document.createElement('li');
+                li.textContent = `${from.name} → ${to.name} (${edge.directions.join(', ')})`;
+                ul.appendChild(li);
+            }
+            mapEdges.appendChild(ul);
+        }
+
+        function handleMapMessage(message) {
+            const [rawId, rawName] = JSON.parse(message);
+            const id = Number(rawId);
+            const name = rawName || `Room ${id}`;
+            const previous = graph.current;
+            const direction = parseDirection(lastCommand);
+            const room = addRoom(id, name, direction);
+
+            if (previous && previous.id !== room.id) addEdge(previous, room, direction || lastCommand || 'move');
+            graph.current = room;
+            renderMap();
+        }
+
+        function renderObjectNode(node) {
+            const li = document.createElement('li');
+            const label = document.createElement('span');
+            label.textContent = `${node.name || '(No Name)'} `;
+            const number = document.createElement('span');
+            number.className = 'object-number';
+            number.textContent = `(#${node.number})`;
+            li.appendChild(label);
+            li.appendChild(number);
+
+            if (node.children && node.children.length) {
+                const ul = document.createElement('ul');
+                for (const child of node.children) ul.appendChild(renderObjectNode(child));
+                li.appendChild(ul);
+            }
+            return li;
+        }
+
+        function handleTreeMessage(message) {
+            const tree = JSON.parse(message || '{}');
+            objectTree.className = '';
+            objectTree.textContent = '';
+
+            if (!tree || Object.keys(tree).length === 0) {
+                objectTree.className = 'empty-state';
+                objectTree.textContent = 'No object data yet.';
+                return;
+            }
+
+            const ul = document.createElement('ul');
+            ul.appendChild(renderObjectNode(tree));
+            objectTree.appendChild(ul);
+        }
+
+        function clearMapButKeepCurrent() {
+            const current = graph.current;
+            graph.rooms.clear();
+            graph.edges.clear();
+            if (current) graph.rooms.set(current.id, current);
+            renderMap();
+        }
+
+        function resetLivePanels() {
+            lastCommand = '';
+            graph.rooms.clear();
+            graph.edges.clear();
+            graph.current = null;
+            renderMap();
+            objectTree.className = 'empty-state';
+            objectTree.textContent = 'No object data yet.';
+        }
+
         function jsMessage(typePtr, messagePtr) {
             const type = readCString(typePtr);
             const message = readCString(messagePtr);
@@ -116,8 +469,18 @@
                 }
             } else if (type === 'instructions') {
                 console.debug('instruction log:', message);
-            } else if (type === 'map' || type === 'tree') {
-                console.debug(type, message);
+            } else if (type === 'map') {
+                try {
+                    handleMapMessage(message);
+                } catch (err) {
+                    console.error('map render failed:', err, message);
+                }
+            } else if (type === 'tree') {
+                try {
+                    handleTreeMessage(message);
+                } catch (err) {
+                    console.error('tree render failed:', err, message);
+                }
             } else {
                 console.debug(type, message);
             }
@@ -186,6 +549,7 @@
             output.textContent = '';
             statusLeft.textContent = '';
             statusRight.textContent = '';
+            resetLivePanels();
             wasm.exports.create(ptr, data.length);
             input.disabled = false;
             input.focus();
@@ -196,6 +560,7 @@
             if (e.key !== 'Enter' || input.disabled) return;
             const command = input.value.trim();
             if (!command) return;
+            lastCommand = command;
             appendLine('> ' + command);
             const [ptr] = writeCString(command);
             wasm.exports.feed(ptr);
@@ -203,6 +568,8 @@
             runUntilInputOrDone();
         });
 
+        mapClear.addEventListener('click', clearMapButKeepCurrent);
+        renderMap();
         initWasm();
     </script>
 </body>
