@@ -47,80 +47,55 @@ cargo build --release --lib --target wasm32-unknown-unknown
 # target/wasm32-unknown-unknown/release/web.wasm
 ```
 
-You can then load `web.wasm` from a web page using the WebAssembly JavaScript API (see the `web/` directory for a minimal example).
+Copy the generated file into the `web/` directory:
+
+```bash
+cp target/wasm32-unknown-unknown/release/web.wasm web/
+```
 
 ## Running the Web Version Locally
 
-After building the WebAssembly module, you can serve the web player using any static web server.
+After building the WebAssembly module and copying `web.wasm`, you can serve the web player.
 
 ### Using Python (Quick Testing)
 
 ```bash
-# From the project root
 python3 -m http.server 8000
 ```
 
-Then open http://localhost:8000/web/ in your browser.
+Open http://localhost:8000/web/
 
-### Using Node.js (http-server)
+### Using a Container (Recommended for distribution)
 
-```bash
-npx http-server -p 8000
-```
+See the **Building a Container Image** section below.
 
-### Using Apache
+## Building a Container Image (Docker / Podman)
 
-1. Copy the contents of the `web/` directory (or the entire project) into your Apache document root (e.g. `/var/www/html/encrusted`).
-2. Ensure `web.wasm` and `index.html` are present.
-3. Restart Apache:
+### Prerequisites
 
-```bash
-sudo systemctl restart apache2
-```
+- Podman or Docker installed
+- You must have already built the WebAssembly module and copied `web.wasm` into the `web/` directory (see above).
 
-Visit `http://your-server/encrusted/web/`.
+### Build the Container
 
-### Using Nginx
-
-1. Place the `web/` directory inside your Nginx web root.
-2. Example configuration snippet:
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    root /var/www/encrusted;
-
-    location / {
-        try_files $uri $uri/ =404;
-    }
-
-    # Important for WebAssembly MIME type
-    location ~* \.wasm$ {
-        default_type application/wasm;
-    }
-}
-```
-
-3. Reload Nginx:
+You **must** build with `--network=host`:
 
 ```bash
-sudo nginx -s reload
+podman build --network=host -t encrusted-web -f Containerfile .
 ```
 
-### Important Notes
+### Run the Container
 
-- WebAssembly modules generally cannot be loaded via `file://` URLs due to CORS and security restrictions. You **must** serve the files over HTTP or HTTPS.
-- Make sure your web server sends the correct MIME type for `.wasm` files (`application/wasm`).
-- The included `web/index.html` provides a minimal working interface. For a richer experience, you can integrate the original React frontend from the `src/js/` directory.
+```bash
+podman run -d \
+  --name encrusted-web \
+  --network=host \
+  localhost/encrusted-web
+```
 
-## Notes
+Access at **http://localhost:8999**
 
-- Only Z-machine version 3 is currently supported.
-- Saves are stored in the Quetzal format.
-- The project has been modernized to Rust Edition 2021.
+### Notes
 
-## License
-
-MIT — see [LICENSE](LICENSE) for details.
+- The container expects `web.wasm` to already exist in the `web/` directory.
+- If you see "Failed to load WebAssembly", make sure you completed the WebAssembly build step and copied the `.wasm` file before building the container.

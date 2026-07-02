@@ -8,7 +8,7 @@ use regex::Regex;
 use atty::Stream;
 use term_size;
 
-use traits::UI;
+use crate::traits::UI;
 
 lazy_static! {
     static ref ANSI_RE: Regex = Regex::new(

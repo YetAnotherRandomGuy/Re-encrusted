@@ -17,91 +17,192 @@
             background: #111;
             border: 1px solid #00ff00;
             padding: 20px;
-            height: 400px;
+            min-height: 400px;
+            max-height: 60vh;
             overflow-y: auto;
-            white-space: pre-wrap;
+            white-space: normal;
             margin-bottom: 10px;
         }
-        #input {
-            width: 100%;
+        #input, #story {
             background: #111;
             border: 1px solid #00ff00;
             color: #00ff00;
             padding: 10px;
             font-family: 'Courier New', monospace;
             font-size: 16px;
+            margin: 4px 0;
         }
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .status {
-            color: #888;
-            font-size: 0.9em;
+        #input { width: 100%; box-sizing: border-box; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .status { color: #888; font-size: 0.9em; }
+        .error { color: #ff4444; }
+        .debug { color: #888; }
+        .object { color: #66ccff; }
+        .room { color: #ffff66; font-weight: bold; }
+        #statusbar {
+            display: flex;
+            justify-content: space-between;
+            border: 1px solid #00ff00;
+            border-bottom: 0;
+            padding: 6px 10px;
+            background: #061006;
         }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Encrusted</h1>
-        <p class="status">A modern Z-machine interpreter • WebAssembly edition</p>
+        <p class="status">A Z-machine interpreter • WebAssembly edition</p>
     </div>
 
+    <label>Story file (.z3/.z4/.z5/.z8): <input type="file" id="story" accept=".z3,.z4,.z5,.z8,.zblorb,.dat"></label>
+    <div id="statusbar"><span id="status-left"></span><span id="status-right"></span></div>
     <div id="output">Loading WebAssembly module...</div>
-
-    <input type="text" id="input" placeholder="Type your command here..." disabled>
+    <input type="text" id="input" placeholder="Load a story file, then type commands here..." disabled>
 
     <script type="module">
         const output = document.getElementById('output');
         const input = document.getElementById('input');
+        const story = document.getElementById('story');
+        const statusLeft = document.getElementById('status-left');
+        const statusRight = document.getElementById('status-right');
 
-        let wasmInstance = null;
+        let wasm = null;
         let memory = null;
+        let running = false;
 
-        function print(text) {
-            output.textContent += text + '\n';
+        function appendLine(text, className = '') {
+            const line = document.createElement('div');
+            line.textContent = text;
+            if (className) line.className = className;
+            output.appendChild(line);
             output.scrollTop = output.scrollHeight;
+        }
+
+        function appendHtml(html) {
+            const div = document.createElement('div');
+            div.innerHTML = html;
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function readCString(ptr) {
+            const bytes = new Uint8Array(memory.buffer);
+            let end = ptr;
+            while (bytes[end] !== 0) end++;
+            return new TextDecoder().decode(bytes.subarray(ptr, end));
+        }
+
+        function writeCString(text) {
+            const encoded = new TextEncoder().encode(text + '\0');
+            const ptr = wasm.exports.allocate(encoded.length);
+            new Uint8Array(memory.buffer, ptr, encoded.length).set(encoded);
+            return [ptr, encoded.length];
+        }
+
+        function jsMessage(typePtr, messagePtr) {
+            const type = readCString(typePtr);
+            const message = readCString(messagePtr);
+
+            if (type === 'print') {
+                appendHtml(message);
+            } else if (type === 'header') {
+                try {
+                    const [left, right] = JSON.parse(message);
+                    statusLeft.textContent = left || '';
+                    statusRight.textContent = right || '';
+                } catch (_) {
+                    appendLine(message, 'debug');
+                }
+            } else if (type === 'instructions') {
+                console.debug('instruction log:', message);
+            } else if (type === 'map' || type === 'tree') {
+                console.debug(type, message);
+            } else {
+                console.debug(type, message);
+            }
+        }
+
+        function runUntilInputOrDone(maxSteps = 20000) {
+            if (!wasm || running) return;
+            running = true;
+            try {
+                for (let i = 0; i < maxSteps; i++) {
+                    const done = wasm.exports.step();
+                    if (done) {
+                        input.disabled = true;
+                        appendLine('[Story ended]', 'status');
+                        return;
+                    }
+                }
+                // The interpreter yields by waiting for feed() from JS; avoid locking the browser.
+            } catch (err) {
+                appendLine('Runtime error: ' + err.message, 'error');
+                console.error(err);
+            } finally {
+                running = false;
+            }
         }
 
         async function initWasm() {
             try {
                 const response = await fetch('web.wasm');
+                if (!response.ok) throw new Error(`Failed to load web.wasm (HTTP ${response.status})`);
+
                 const bytes = await response.arrayBuffer();
-                const { instance } = await WebAssembly.instantiate(bytes, {
+                const magic = new Uint8Array(bytes, 0, 4);
+                if (magic[0] !== 0x00 || magic[1] !== 0x61 || magic[2] !== 0x73 || magic[3] !== 0x6d) {
+                    throw new Error('web.wasm is not a valid WebAssembly binary');
+                }
+
+                const result = await WebAssembly.instantiate(bytes, {
                     env: {
-                        // Add any required imports here if the WASM module needs them
+                        rand: () => (Math.random() * 0x100000000) >>> 0,
+                        js_message: jsMessage,
                     }
                 });
 
-                wasmInstance = instance;
-                memory = new Uint8Array(instance.exports.memory.buffer);
+                wasm = result.instance;
+                memory = wasm.exports.memory;
+                if (!memory) throw new Error('WASM module did not export memory');
 
-                print("WebAssembly module loaded successfully.");
-                print("Note: Full interactive support requires the original React frontend.");
-                print("This is a minimal demonstration page.");
-                print("");
-                print("To play games, build the native binary (see howto.md).");
-
-                input.disabled = false;
-                input.focus();
-
+                if (wasm.exports.hook) wasm.exports.hook();
+                output.textContent = '';
+                appendLine('WebAssembly Z-machine loaded. Choose a story file to begin.');
             } catch (err) {
-                output.textContent = "Failed to load WebAssembly: " + err.message;
+                output.textContent = '';
+                appendLine('Failed to load WebAssembly: ' + err.message, 'error');
+                appendLine('Rebuild with: cargo build --release --lib --target wasm32-unknown-unknown', 'error');
+                appendLine('Then copy: cp target/wasm32-unknown-unknown/release/web.wasm web/', 'error');
                 console.error(err);
             }
         }
 
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && input.value.trim() !== '') {
-                const command = input.value.trim();
-                print('> ' + command);
-                // In a full implementation, this would call into the WASM module
-                print("(Command sent to interpreter - full integration pending)");
-                input.value = '';
-            }
+        story.addEventListener('change', async () => {
+            if (!wasm || !story.files.length) return;
+            const data = new Uint8Array(await story.files[0].arrayBuffer());
+            const ptr = wasm.exports.allocate(data.length);
+            new Uint8Array(memory.buffer, ptr, data.length).set(data);
+            output.textContent = '';
+            statusLeft.textContent = '';
+            statusRight.textContent = '';
+            wasm.exports.create(ptr, data.length);
+            input.disabled = false;
+            input.focus();
+            runUntilInputOrDone();
         });
 
-        // Initialize
+        input.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' || input.disabled) return;
+            const command = input.value.trim();
+            if (!command) return;
+            appendLine('> ' + command);
+            const [ptr] = writeCString(command);
+            wasm.exports.feed(ptr);
+            input.value = '';
+            runUntilInputOrDone();
+        });
+
         initWasm();
     </script>
 </body>

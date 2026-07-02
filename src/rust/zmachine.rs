@@ -11,21 +11,21 @@ use std::process;
 use std::str;
 
 use base64;
-use enum_primitive::FromPrimitive;
+use num_traits::FromPrimitive;
 use rand;
 use rand::{Rng, SeedableRng};
 use serde_json;
 
-use buffer::Buffer;
-use frame::Frame;
-use instruction::Branch;
-use instruction::Instruction;
-use instruction::Opcode;
-use instruction::Operand;
-use instruction::OperandType;
-use options::Options;
-use quetzal::QuetzalSave;
-use traits::UI;
+use crate::buffer::Buffer;
+use crate::frame::Frame;
+use crate::instruction::Branch;
+use crate::instruction::Instruction;
+use crate::instruction::Opcode;
+use crate::instruction::Operand;
+use crate::instruction::OperandType;
+use crate::options::Options;
+use crate::quetzal::QuetzalSave;
+use crate::traits::UI;
 
 #[derive(Debug)]
 enum ZStringState {
@@ -1237,7 +1237,7 @@ impl Zmachine {
     }
 
     pub fn handle_instruction(&mut self, instr: &Instruction) {
-        use self::Opcode::*;
+        use crate::instruction::Opcode::*;
 
         // ~mutably~ gets the arguments (might pop stack)
         let args = self.get_arguments(instr.operands.as_slice());

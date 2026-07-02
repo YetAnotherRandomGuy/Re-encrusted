@@ -4,8 +4,12 @@ use std::fmt::Write;
 
 use serde_json;
 
-use js_message;
-use traits::UI;
+use crate::traits::UI;
+
+#[link(wasm_import_module = "env")]
+extern "C" {
+    fn js_message(mtype: *mut std::os::raw::c_char, message: *mut std::os::raw::c_char);
+}
 
 #[derive(Debug)]
 enum Token {

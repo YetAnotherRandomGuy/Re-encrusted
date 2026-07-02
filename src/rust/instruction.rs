@@ -1,10 +1,11 @@
 use std::fmt;
 use std::hash;
 
-enum_from_primitive! {
-    #[allow(non_camel_case_types)]
-    #[derive(Clone, Copy, Debug, PartialEq)]
-    pub enum Opcode {
+use num_traits::FromPrimitive;
+
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, PartialEq, num_derive::FromPrimitive)]
+pub enum Opcode {
         // Two-operand opcodes (2OP)
         OP2_1  = 1,  OP2_2  = 2,  OP2_3  = 3,  OP2_4  = 4,  OP2_5  = 5,  OP2_6  = 6,
         OP2_7  = 7,  OP2_8  = 8,  OP2_9  = 9,  OP2_10 = 10, OP2_11 = 11, OP2_12 = 12,
@@ -37,7 +38,6 @@ enum_from_primitive! {
         EXT_1022 = 1022, EXT_1023 = 1023, EXT_1024 = 1024, EXT_1025 = 1025,
         EXT_1026 = 1026, EXT_1027 = 1027, EXT_1028 = 1028, EXT_1029 = 1029,
     }
-}
 
 #[derive(Debug, PartialEq)]
 pub enum OperandType {
@@ -113,7 +113,7 @@ pub struct Instruction {
 
 impl Instruction {
     pub fn does_store(opcode: Opcode, version: u8) -> bool {
-        use self::Opcode::*;
+        use crate::instruction::Opcode::*;
 
         match opcode {
             // does a store in any version
@@ -134,7 +134,7 @@ impl Instruction {
     }
 
     pub fn does_branch(opcode: Opcode, version: u8) -> bool {
-        use self::Opcode::*;
+        use crate::instruction::Opcode::*;
 
         match opcode {
             // does a branch in any version
@@ -150,7 +150,7 @@ impl Instruction {
     }
 
     pub fn does_text(opcode: Opcode) -> bool {
-        use self::Opcode::*;
+        use crate::instruction::Opcode::*;
 
         match opcode {
             OP0_178 | OP0_179 => true,
@@ -159,7 +159,7 @@ impl Instruction {
     }
 
     pub fn name(opcode: Opcode, version: u8) -> String {
-        use self::Opcode::*;
+        use crate::instruction::Opcode::*;
 
         match opcode {
             OP2_1 => "je",
@@ -307,7 +307,7 @@ impl Instruction {
 
 impl Instruction {
     pub fn advances(&self) -> bool {
-        use self::Opcode::*;
+        use crate::instruction::Opcode::*;
 
         // Some instructions never advance to the next instruction:
         // throw, ret, jump, rtrue, rfalse, print_ret, restart, and ret_popped
@@ -319,7 +319,7 @@ impl Instruction {
     }
 
     pub fn does_call(&self, version: u8) -> bool {
-        use self::Opcode::*;
+        use crate::instruction::Opcode::*;
 
         match self.opcode {
             OP2_25 | OP2_26 | OP1_136 | VAR_224 | VAR_236 | VAR_249 | VAR_250 => true,
