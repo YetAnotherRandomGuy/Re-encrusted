@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encrusted - Web Player</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #00ff00;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.4;
+        }
+        #output {
+            background: #111;
+            border: 1px solid #00ff00;
+            padding: 20px;
+            height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin-bottom: 10px;
+        }
+        #input {
+            width: 100%;
+            background: #111;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .status {
+            color: #888;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Encrusted</h1>
+        <p class="status">A modern Z-machine interpreter • WebAssembly edition</p>
+    </div>
+
+    <div id="output">Loading WebAssembly module...</div>
+
+    <input type="text" id="input" placeholder="Type your command here..." disabled>
+
+    <script type="module">
+        const output = document.getElementById('output');
+        const input = document.getElementById('input');
+
+        let wasmInstance = null;
+        let memory = null;
+
+        function print(text) {
+            output.textContent += text + '\n';
+            output.scrollTop = output.scrollHeight;
+        }
+
+        async function initWasm() {
+            try {
+                const response = await fetch('web.wasm');
+                const bytes = await response.arrayBuffer();
+                const { instance } = await WebAssembly.instantiate(bytes, {
+                    env: {
+                        // Add any required imports here if the WASM module needs them
+                    }
+                });
+
+                wasmInstance = instance;
+                memory = new Uint8Array(instance.exports.memory.buffer);
+
+                print("WebAssembly module loaded successfully.");
+                print("Note: Full interactive support requires the original React frontend.");
+                print("This is a minimal demonstration page.");
+                print("");
+                print("To play games, build the native binary (see howto.md).");
+
+                input.disabled = false;
+                input.focus();
+
+            } catch (err) {
+                output.textContent = "Failed to load WebAssembly: " + err.message;
+                console.error(err);
+            }
+        }
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && input.value.trim() !== '') {
+                const command = input.value.trim();
+                print('> ' + command);
+                // In a full implementation, this would call into the WASM module
+                print("(Command sent to interpreter - full integration pending)");
+                input.value = '';
+            }
+        });
+
+        // Initialize
+        initWasm();
+    </script>
+</body>
+</html>
