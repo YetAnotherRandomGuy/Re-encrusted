@@ -1,4 +1,4 @@
-<img src="https://demille.github.io/encrusted/src/img/name.svg" alt="encrusted" width="200px" height="78px" align="left" />
+<!-- <img src="https://demille.github.io/encrusted/src/img/name.svg" alt="encrusted" width="200px" height="78px" align="left" /> 
 
 <p align="right">
   <img src="https://img.shields.io/crates/v/encrusted.svg" alt="Crates.io" align="right" />
@@ -8,6 +8,15 @@
   </a>
 </p>
 <br/>
+-->
+
+Forked from https://github.com/demille/encrusted
+
+This is an agentic AI test: As I am both a Rust and W/A n00b, the goal here is to use various LLM models to :
+
+- Update the code to a "modern" Rust toolchain
+- Build an example of how to use the W/A output in a web page
+- Add support for later versions of the Zcode interpreter (excluding V6, the graphical games like Zork 0, Arthur, etc)
 
 ---
 
