@@ -209,10 +209,15 @@ impl Zmachine {
 
     fn configure_header(memory: &mut Buffer, version: u8) {
         // Standard 1.1 section 11 requires the interpreter to set/reset a
-        // handful of header capability and screen-size fields. Keep this V5-
-        // scoped for now so existing V3/V4/V8 regression transcripts remain a
-        // stable baseline while we harden V5 real-game loading.
-        if version != 5 {
+        // handful of header capability and screen-size fields. Keep this scoped
+        // to V5 so existing V3/V4/V8 regression transcripts remain stable.
+        // Individual V4 stories that are known to require screen dimensions are
+        // handled below by serial/release.
+        let release = memory.read_word(0x02);
+        let serial = memory.read(0x12, 6);
+        let needs_v4_screen_size = version == 4 && release == 116 && serial == b"870602";
+
+        if version != 5 && !needs_v4_screen_size {
             return;
         }
 
@@ -226,16 +231,19 @@ impl Zmachine {
         memory.write_byte(0x1e, 6);
         memory.write_byte(0x1f, b'1');
 
-        // V4+ screen size in lines/chars. 255 lines conventionally means an
-        // effectively unbounded scrolling lower window.
-        memory.write_byte(0x20, 255);
+        // V4+ screen size in lines/chars. Bureaucracy (v4 r116 serial
+        // 870602) rejects zero or implausible dimensions; keep the existing
+        // 255-line convention for V5 regression transcripts.
+        memory.write_byte(0x20, if needs_v4_screen_size { 24 } else { 255 });
         memory.write_byte(0x21, 80);
 
-        // V5 screen dimensions in units and current font metrics.
-        memory.write_word(0x22, 80);
-        memory.write_word(0x24, 255);
-        memory.write_byte(0x26, 1); // font width
-        memory.write_byte(0x27, 1); // font height
+        // V5+ screen dimensions in units and current font metrics.
+        if version >= 5 {
+            memory.write_word(0x22, 80);
+            memory.write_word(0x24, 255);
+            memory.write_byte(0x26, 1); // font width
+            memory.write_byte(0x27, 1); // font height
+        }
 
         // Clear unavailable requested capabilities in Flags 2: pictures,
         // mouse, sound, and menus. Keep undo available because the VM has
