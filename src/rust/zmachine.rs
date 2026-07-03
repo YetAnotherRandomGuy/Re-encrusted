@@ -1395,6 +1395,10 @@ impl Zmachine {
             (VAR_241, &[style]) => self.do_set_text_style(style),
             (VAR_242, &[mode]) => self.do_buffer_mode(mode),
             (VAR_246, _) => self.do_read_char(instr),
+            (VAR_253, &[first, second, size]) => self.do_copy_table(first, second, size),
+            (VAR_254, &[addr, width]) => self.do_print_table(addr, width, 1, 0),
+            (VAR_254, &[addr, width, height]) => self.do_print_table(addr, width, height, 0),
+            (VAR_254, &[addr, width, height, skip]) => self.do_print_table(addr, width, height, skip),
             (VAR_249, _) if !args.is_empty() => self.do_call(instr, args[0], &args[1..]), // call_vn
             (VAR_250, _) if !args.is_empty() => self.do_call(instr, args[0], &args[1..]), // call_vn2
 
@@ -2308,6 +2312,53 @@ impl Zmachine {
         }
 
         0
+    }
+
+    // VAR_253
+    fn do_copy_table(&mut self, first: u16, second: u16, size: u16) {
+        let first = first as usize;
+        let count = (size as i16).unsigned_abs() as usize;
+
+        if second == 0 {
+            for offset in 0..count {
+                self.memory.write_byte(first + offset, 0);
+            }
+            return;
+        }
+
+        let second = second as usize;
+        let source = self.memory.read(first, count).to_vec();
+
+        if (size as i16) < 0 || second < first {
+            for (offset, byte) in source.iter().enumerate() {
+                self.memory.write_byte(second + offset, *byte);
+            }
+        } else {
+            for (offset, byte) in source.iter().enumerate().rev() {
+                self.memory.write_byte(second + offset, *byte);
+            }
+        }
+    }
+
+    // VAR_254
+    fn do_print_table(&mut self, addr: u16, width: u16, height: u16, skip: u16) {
+        let mut row_addr = addr as usize;
+        let width = width as usize;
+        let height = height as usize;
+        let skip = skip as usize;
+
+        for row in 0..height {
+            for column in 0..width {
+                let chr = self.memory.read_byte(row_addr + column) as u16;
+                self.do_print_char(chr);
+            }
+
+            row_addr += width + skip;
+
+            if row + 1 < height {
+                self.do_newline();
+            }
+        }
     }
 
     // VAR_248 do_not() (same as OP1_143)
