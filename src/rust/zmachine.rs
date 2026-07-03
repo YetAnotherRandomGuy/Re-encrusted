@@ -530,7 +530,10 @@ impl Zmachine {
     }
 
     fn populate_dictionary(&mut self) {
-        let dictionary_start = self.memory.read_word(0x08) as usize;
+        self.populate_dictionary_from(self.memory.read_word(0x08) as usize);
+    }
+
+    fn populate_dictionary_from(&mut self, dictionary_start: usize) {
         let mut read = self.memory.get_reader(dictionary_start);
 
         let separator_count = read.byte();
@@ -1377,6 +1380,7 @@ impl Zmachine {
             (OP2_22, &[a, b]) => Some(self.do_mul(a, b)),
             (OP2_23, &[a, b]) => Some(self.do_div(a, b)),
             (OP2_24, &[a, b]) => Some(self.do_mod(a, b)),
+            (OP0_185, &[]) if self.version >= 5 => Some(self.do_catch()),
             (OP1_128, &[a]) => Some(self.do_jz(a)),
             (OP1_129, &[obj]) => Some(self.do_get_sibling(obj)),
             (OP1_130, &[obj]) => Some(self.do_get_child(obj)),
@@ -1391,11 +1395,21 @@ impl Zmachine {
             (VAR_247, &[x, table, len]) => Some(self.do_scan_table(x, table, len, 0x82)),
             (VAR_247, &[x, table, len, form]) => Some(self.do_scan_table(x, table, len, form)),
             (VAR_248, &[val]) if self.version >= 5 => Some(self.do_not(val)),
+            (VAR_251, &[text, parse]) => Some({ self.do_tokenise(text, parse, 0, 0); 0 }),
+            (VAR_251, &[text, parse, dictionary]) => Some({ self.do_tokenise(text, parse, dictionary, 0); 0 }),
+            (VAR_251, &[text, parse, dictionary, flag]) => Some({ self.do_tokenise(text, parse, dictionary, flag); 0 }),
+            (VAR_252, &[text, length, from, coded]) => Some({ self.do_encode_text(text, length, from, coded); 0 }),
             (VAR_255, &[num]) => Some(self.do_check_arg_count(num)),
+            (EXT_1000, _) => Some(0),
+            (EXT_1001, _) => Some(0),
             (EXT_1002, &[num, places]) => Some(self.do_log_shift(num, places)),
             (EXT_1003, &[num, places]) => Some(self.do_art_shift(num, places)),
+            (EXT_1004, &[font]) => Some(self.do_set_font(font)),
             (EXT_1009, &[]) => Some(self.do_save_undo(instr)),
             (EXT_1010, &[]) => Some(self.do_restore_undo()),
+            (EXT_1012, &[char]) => Some(self.do_check_unicode(char)),
+            (EXT_1013, &[fg, bg]) => Some(self.do_set_true_colour(fg, bg)),
+            (EXT_1013, &[fg, bg, _window]) => Some(self.do_set_true_colour(fg, bg)),
             _ => None,
         };
 
@@ -1415,6 +1429,9 @@ impl Zmachine {
             (OP2_14, &[obj, dest]) => self.do_insert_obj(obj, dest),
             (OP2_25, &[addr, arg]) => self.do_call(instr, addr, &[arg]), // call_2s
             (OP2_26, &[addr, arg]) => self.do_call(instr, addr, &[arg]), // call_2n
+            (OP2_27, &[fg, bg]) => self.do_set_colour(fg, bg, 0),
+            (OP2_27, &[fg, bg, window]) => self.do_set_colour(fg, bg, window),
+            (OP2_28, &[value, stack_frame]) => self.do_throw(value, stack_frame),
             (OP1_133, &[var]) => self.do_inc(var),
             (OP1_134, &[var]) => self.do_dec(var),
             (OP1_135, &[addr]) => self.do_print_addr(addr),
@@ -1434,12 +1451,14 @@ impl Zmachine {
             (OP0_183, _) => self.do_restart(),
             (OP0_184, _) => self.do_ret_popped(),
             (OP0_185, _) => self.do_pop(),
+            (OP0_180, _) => (),
             (OP0_187, _) => self.do_newline(),
             (OP0_188, _) => self.do_show_status(),
             (VAR_224, _) if !args.is_empty() => self.do_call(instr, args[0], &args[1..]), // call
             (VAR_225, &[array, index, value]) => self.do_storew(array, index, value),
             (VAR_226, &[array, index, value]) => self.do_storeb(array, index, value),
             (VAR_227, &[obj, prop, value]) => self.do_put_prop(obj, prop, value),
+            (VAR_228, &[text]) if self.version >= 5 => self.do_sread(instr, text, 0),
             (VAR_228, &[text, parse]) => self.do_sread(instr, text, parse),
             (VAR_229, &[chr]) => self.do_print_char(chr),
             (VAR_230, &[num]) => self.do_print_num(num),
@@ -1452,8 +1471,10 @@ impl Zmachine {
             (VAR_238, _) => self.do_erase_line(),
             (VAR_239, &[line, column]) => self.do_set_cursor(line, column),
             (VAR_239, &[line, column, window]) => self.do_set_cursor_window(line, column, window),
+            (VAR_240, &[array]) => self.do_get_cursor(array),
             (VAR_241, &[style]) => self.do_set_text_style(style),
             (VAR_242, &[mode]) => self.do_buffer_mode(mode),
+            (EXT_1011, &[char]) => self.do_print_unicode(char),
             (VAR_246, _) => self.do_read_char(instr),
             (VAR_253, &[first, second, size]) => self.do_copy_table(first, second, size),
             (VAR_254, &[addr, width]) => self.do_print_table(addr, width, 1, 0),
@@ -2348,6 +2369,102 @@ impl Zmachine {
     // VAR_242
     fn do_buffer_mode(&mut self, _mode: u16) {
         // Output buffering is handled by host stdout/web batching.
+    }
+
+    fn do_set_colour(&mut self, _fg: u16, _bg: u16, _window: u16) {
+        // Text-mode shim: color changes are cosmetic for this UI.
+    }
+
+    fn do_set_true_colour(&mut self, _fg: u16, _bg: u16) -> u16 {
+        // Text-mode shim: true colour changes are cosmetic for this UI.
+        0
+    }
+
+    fn do_set_font(&mut self, font: u16) -> u16 {
+        // Only font 1 (normal text) is supported by the terminal/web shims.
+        if font == 1 { 1 } else { 0 }
+    }
+
+    fn do_print_unicode(&mut self, chr: u16) {
+        if let Some(c) = char::from_u32(chr as u32) {
+            self.ui.print(&c.to_string());
+        }
+    }
+
+    fn do_check_unicode(&self, chr: u16) -> u16 {
+        // Bit 0: can print; bit 1: can input. We support printable Unicode
+        // scalar values through Rust strings, but not arbitrary Unicode input.
+        if char::from_u32(chr as u32).is_some() { 1 } else { 0 }
+    }
+
+    fn do_throw(&mut self, value: u16, stack_frame: u16) {
+        let frame_count = stack_frame as usize;
+        if frame_count > 0 && frame_count <= self.frames.len() {
+            self.frames.truncate(frame_count);
+        }
+        self.return_from_routine(value);
+    }
+
+    fn do_catch(&self) -> u16 {
+        self.frames.len() as u16
+    }
+
+    fn do_get_cursor(&mut self, array: u16) {
+        let addr = array as usize;
+        self.memory.write_word(addr, 1);
+        self.memory.write_word(addr + 2, 1);
+    }
+
+    fn do_tokenise(&mut self, text_addr: u16, parse_addr: u16, dictionary: u16, _flag: u16) {
+        let old_dictionary = if dictionary != 0 {
+            Some((std::mem::replace(&mut self.dictionary, HashMap::new()), std::mem::replace(&mut self.separators, Vec::new())))
+        } else {
+            None
+        };
+
+        if dictionary != 0 {
+            self.populate_dictionary_from(dictionary as usize);
+        }
+
+        let text_addr = text_addr as usize;
+        let text = if self.version <= 4 {
+            let max = self.memory.read_byte(text_addr) as usize;
+            let mut len = 0usize;
+            while len < max && self.memory.read_byte(text_addr + 1 + len) != 0 {
+                len += 1;
+            }
+            String::from_utf8_lossy(self.memory.read(text_addr + 1, len).into()).into_owned()
+        } else {
+            let len = self.memory.read_byte(text_addr + 1) as usize;
+            String::from_utf8_lossy(self.memory.read(text_addr + 2, len).into()).into_owned()
+        };
+
+        self.tokenise(&text.to_lowercase(), parse_addr as usize);
+
+        if let Some((dictionary, separators)) = old_dictionary {
+            self.dictionary = dictionary;
+            self.separators = separators;
+        }
+    }
+
+    fn do_encode_text(&mut self, text_addr: u16, length: u16, from: u16, coded: u16) {
+        let start = text_addr as usize + from as usize;
+        let text = String::from_utf8_lossy(self.memory.read(start, length as usize).into()).to_lowercase();
+        let mut zchars = Vec::new();
+        for ch in text.chars().take(9) {
+            let pos = "abcdefghijklmnopqrstuvwxyz".find(ch).map(|n| n as u16 + 6).unwrap_or(5);
+            zchars.push(pos);
+        }
+        while zchars.len() < 9 {
+            zchars.push(5);
+        }
+        for word in 0..3 {
+            let mut value = (zchars[word * 3] << 10) | (zchars[word * 3 + 1] << 5) | zchars[word * 3 + 2];
+            if word == 2 {
+                value |= 0x8000;
+            }
+            self.memory.write_word(coded as usize + word * 2, value);
+        }
     }
 
     // VAR_247

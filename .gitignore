@@ -5,3 +5,4 @@
 
 # Local proprietary/redistribution-restricted story fixtures used for smoke tests.
 /newer/
+/tests/fixtures/
