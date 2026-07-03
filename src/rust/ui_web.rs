@@ -127,13 +127,15 @@ impl UI for WebUI {
     }
 
     fn message(&self, mtype: &str, msg: &str) {
-        let type_ptr = CString::new(mtype).unwrap().into_raw();
-        let msg_ptr = CString::new(msg).unwrap().into_raw();
+        let safe_type = mtype.replace('\0', "");
+        let safe_msg = msg.replace('\0', "");
+        let type_ptr = CString::new(safe_type).unwrap().into_raw();
+        let msg_ptr = CString::new(safe_msg).unwrap().into_raw();
 
         unsafe {
             js_message(type_ptr, msg_ptr);
-            CString::from_raw(type_ptr); // free memory
-            CString::from_raw(msg_ptr);
+            let _ = CString::from_raw(type_ptr); // free memory
+            let _ = CString::from_raw(msg_ptr);
         }
     }
 
