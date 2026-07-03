@@ -156,9 +156,10 @@ pub struct Zmachine {
 
 impl Zmachine {
     pub fn new(data: Vec<u8>, ui: Box<dyn UI>, options: Options) -> Zmachine {
-        let memory = Buffer::new(data);
+        let mut memory = Buffer::new(data);
 
         let version = memory.read_byte(0x00);
+        Zmachine::configure_header(&mut memory, version);
         let initial_pc = memory.read_word(0x06) as usize;
         let prop_defaults = memory.read_word(0x0A) as usize;
         let static_start = memory.read_word(0x0E) as usize;
@@ -204,6 +205,47 @@ impl Zmachine {
         zvm.populate_dictionary();
 
         zvm
+    }
+
+    fn configure_header(memory: &mut Buffer, version: u8) {
+        // Standard 1.1 section 11 requires the interpreter to set/reset a
+        // handful of header capability and screen-size fields. Keep this V5-
+        // scoped for now so existing V3/V4/V8 regression transcripts remain a
+        // stable baseline while we harden V5 real-game loading.
+        if version != 5 {
+            return;
+        }
+
+        let flags1 = memory.read_byte(0x01);
+        // V4+ Flags 1: bold, italic, and fixed-space styles are available.
+        // Timed keyboard input is not implemented yet, and colour is left off.
+        memory.write_byte(0x01, (flags1 & !0b1000_0001) | 0b0001_1100);
+
+        // Interpreter id/version. Use IBM PC as a conservative text-mode
+        // target for Infocom V5 stories and an ASCII version byte.
+        memory.write_byte(0x1e, 6);
+        memory.write_byte(0x1f, b'1');
+
+        // V4+ screen size in lines/chars. 255 lines conventionally means an
+        // effectively unbounded scrolling lower window.
+        memory.write_byte(0x20, 255);
+        memory.write_byte(0x21, 80);
+
+        // V5 screen dimensions in units and current font metrics.
+        memory.write_word(0x22, 80);
+        memory.write_word(0x24, 255);
+        memory.write_byte(0x26, 1); // font width
+        memory.write_byte(0x27, 1); // font height
+
+        // Clear unavailable requested capabilities in Flags 2: pictures,
+        // mouse, sound, and menus. Keep undo available because the VM has
+        // internal undo support.
+        let flags2 = memory.read_word(0x10);
+        memory.write_word(0x10, (flags2 | 0b0000_0000_0001_0000) & !0b0000_0001_1010_1000);
+
+        // Default background/foreground colours: white on black.
+        memory.write_byte(0x2c, 2);
+        memory.write_byte(0x2d, 9);
     }
 
     #[allow(dead_code)]
@@ -1333,7 +1375,15 @@ impl Zmachine {
             (VAR_230, &[num]) => self.do_print_num(num),
             (VAR_232, &[value]) => self.do_push(value),
             (VAR_233, &[var]) => { self.do_pull(var); }
+            (VAR_234, &[lines]) => self.do_split_window(lines),
+            (VAR_235, &[window]) => self.do_set_window(window),
             (VAR_236, _) if !args.is_empty() => self.do_call(instr, args[0], &args[1..]), // call_vs2
+            (VAR_237, &[window]) => self.do_erase_window(window),
+            (VAR_238, _) => self.do_erase_line(),
+            (VAR_239, &[line, column]) => self.do_set_cursor(line, column),
+            (VAR_239, &[line, column, window]) => self.do_set_cursor_window(line, column, window),
+            (VAR_241, &[style]) => self.do_set_text_style(style),
+            (VAR_242, &[mode]) => self.do_buffer_mode(mode),
             (VAR_249, _) if !args.is_empty() => self.do_call(instr, args[0], &args[1..]), // call_vn
             (VAR_250, _) if !args.is_empty() => self.do_call(instr, args[0], &args[1..]), // call_vn2
 
@@ -2158,6 +2208,55 @@ impl Zmachine {
         self.write_indirect_variable(var as u8, value);
 
         value
+    }
+
+    // VAR_234
+    fn do_split_window(&mut self, _lines: u16) {
+        // Text-mode compatibility shim. We do not maintain a separate upper
+        // window yet; terminal/web output remains a single scrolling stream.
+    }
+
+    // VAR_235
+    fn do_set_window(&mut self, _window: u16) {
+        // Text-mode compatibility shim for V4/V5 screen control.
+    }
+
+    // VAR_237
+    fn do_erase_window(&mut self, window: u16) {
+        // The Standard uses -1 (0xffff) to unsplit and clear the screen, and
+        // -2 (0xfffe) to clear the whole screen without changing window size.
+        // For the current text UI, clear only for whole-screen requests.
+        if window == 0xffff || window == 0xfffe {
+            self.ui.clear();
+        }
+    }
+
+    // VAR_238
+    fn do_erase_line(&mut self) {
+        // Text-mode compatibility shim. Clearing to end-of-line is cosmetic;
+        // ignoring it preserves game flow in non-cursor-addressed output.
+    }
+
+    // VAR_239
+    fn do_set_cursor(&mut self, _line: u16, _column: u16) {
+        // Text-mode compatibility shim. Cursor addressing is only needed for
+        // accurate upper-window rendering.
+    }
+
+    // VAR_239, V6 form with window operand. Kept separate so decoding traces
+    // remain explicit if V6 is ever enabled.
+    fn do_set_cursor_window(&mut self, line: u16, column: u16, _window: u16) {
+        self.do_set_cursor(line, column);
+    }
+
+    // VAR_241
+    fn do_set_text_style(&mut self, _style: u16) {
+        // Text styles are cosmetic in the terminal/web shim for now.
+    }
+
+    // VAR_242
+    fn do_buffer_mode(&mut self, _mode: u16) {
+        // Output buffering is handled by host stdout/web batching.
     }
 
     // VAR_248 do_not() (same as OP1_143)
