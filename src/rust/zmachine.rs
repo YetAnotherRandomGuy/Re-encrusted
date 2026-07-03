@@ -1322,6 +1322,8 @@ impl Zmachine {
             (OP0_191, &[]) => Some(1), // piracy
             (VAR_231, &[range]) => Some(self.do_random(range)),
             (VAR_233, &[var]) if self.version == 6 => Some(self.do_pull(var)),
+            (VAR_247, &[x, table, len]) => Some(self.do_scan_table(x, table, len, 0x82)),
+            (VAR_247, &[x, table, len, form]) => Some(self.do_scan_table(x, table, len, form)),
             (VAR_248, &[val]) if self.version >= 5 => Some(self.do_not(val)),
             (VAR_255, &[num]) => Some(self.do_check_arg_count(num)),
             (EXT_1002, &[num, places]) => Some(self.do_log_shift(num, places)),
@@ -1384,6 +1386,7 @@ impl Zmachine {
             (VAR_239, &[line, column, window]) => self.do_set_cursor_window(line, column, window),
             (VAR_241, &[style]) => self.do_set_text_style(style),
             (VAR_242, &[mode]) => self.do_buffer_mode(mode),
+            (VAR_246, _) => self.do_read_char(instr),
             (VAR_249, _) if !args.is_empty() => self.do_call(instr, args[0], &args[1..]), // call_vn
             (VAR_250, _) if !args.is_empty() => self.do_call(instr, args[0], &args[1..]), // call_vn2
 
@@ -2173,6 +2176,15 @@ impl Zmachine {
         }
     }
 
+    // VAR_246
+    fn do_read_char(&mut self, instr: &Instruction) {
+        self.update_status_bar();
+
+        let input = self.ui.get_user_input();
+        let chr = input.bytes().next().unwrap_or(b'\n') as u16;
+        self.process_result(instr, chr);
+    }
+
     // VAR_229
     fn do_print_char(&mut self, chr: u16) {
         self.ui.print(&(chr as u8 as char).to_string());
@@ -2257,6 +2269,32 @@ impl Zmachine {
     // VAR_242
     fn do_buffer_mode(&mut self, _mode: u16) {
         // Output buffering is handled by host stdout/web batching.
+    }
+
+    // VAR_247
+    fn do_scan_table(&self, x: u16, table: u16, len: u16, form: u16) -> u16 {
+        // Standard 1.1: bit 7 set means word entries, clear means byte entries.
+        // The low seven bits give the byte spacing between entries. If the
+        // optional form operand is omitted, entries are words packed every two
+        // bytes, which is equivalent to form 0x82.
+        let table = table as usize;
+        let entry_is_word = form & 0x80 != 0;
+        let entry_size = usize::from((form & 0x7f) as u8).max(if entry_is_word { 2 } else { 1 });
+
+        for i in 0..usize::from(len) {
+            let addr = table + i * entry_size;
+            let value = if entry_is_word {
+                self.memory.read_word(addr)
+            } else {
+                u16::from(self.memory.read_byte(addr))
+            };
+
+            if value == x {
+                return addr as u16;
+            }
+        }
+
+        0
     }
 
     // VAR_248 do_not() (same as OP1_143)

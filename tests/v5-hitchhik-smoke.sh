@@ -12,7 +12,7 @@ out=$(mktemp)
 err=$(mktemp)
 trap 'rm -f "$out" "$err"' EXIT
 
-printf 'i\nscore\n\nquit\ny\n' | timeout 10 ./target/debug/encrusted "$story" >"$out" 2>"$err"
+printf 'stand up\nfind a light\ni\nscore\n\nquit\ny\n' | timeout 10 ./target/debug/encrusted "$story" >"$out" 2>"$err"
 rc=$?
 
 if grep -q 'Opcode not yet implemented' "$err"; then
