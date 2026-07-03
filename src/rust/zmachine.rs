@@ -215,7 +215,9 @@ impl Zmachine {
         // handled below by serial/release.
         let release = memory.read_word(0x02);
         let serial = memory.read(0x12, 6);
-        let needs_v4_screen_size = version == 4 && release == 116 && serial == b"870602";
+        let needs_v4_screen_size = version == 4
+            && ((release == 116 && serial == b"870602") // Bureaucracy
+                || (release == 12 && serial == b"860926")); // Trinity
 
         if version != 5 && !needs_v4_screen_size {
             return;
@@ -629,6 +631,38 @@ impl Zmachine {
         }
     }
 
+    fn get_object_name_if_valid(&self, object: u16) -> Option<String> {
+        if object == 0 {
+            return None;
+        }
+
+        let obj_addr = self.get_object_addr(object);
+        let prop_addr_word = obj_addr + self.attr_width + if self.version <= 3 { 3 } else { 6 };
+
+        if prop_addr_word + 1 >= self.memory.len() {
+            return None;
+        }
+
+        let prop_addr = self.memory.read_word(prop_addr_word) as usize;
+
+        if prop_addr >= self.memory.len() {
+            return None;
+        }
+
+        let text_length = self.memory.read_byte(prop_addr);
+        let text_end = prop_addr + 1 + text_length as usize * 2;
+
+        if text_end > self.memory.len() {
+            return None;
+        }
+
+        Some(if text_length > 0 {
+            self.read_zstring(prop_addr + 1)
+        } else {
+            String::new()
+        })
+    }
+
     fn get_parent(&self, object: u16) -> u16 {
         if object == 0 {
             return 0;
@@ -995,14 +1029,18 @@ impl Zmachine {
     #[allow(dead_code)]
     pub fn get_current_room(&self) -> (u16, String) {
         let num = self.read_global(0);
-        let name = self.get_object_name(num);
+        let name = self
+            .get_object_name_if_valid(num)
+            .unwrap_or_else(|| String::new());
 
         (num, name)
     }
 
     fn get_status(&self) -> (String, String) {
         let num = self.read_global(0);
-        let left = self.get_object_name(num);
+        let left = self
+            .get_object_name_if_valid(num)
+            .unwrap_or_else(|| String::new());
 
         // bit 1 in header flags:
         // 0 => score/turns
@@ -2156,7 +2194,9 @@ impl Zmachine {
         }
 
         // and save the current state
-        let location = self.get_object_name(self.read_global(0));
+        let location = self
+            .get_object_name_if_valid(self.read_global(0))
+            .unwrap_or_else(|| String::new());
         let state = self.make_save_state(instr.next);
         self.current_state = Some((location, state));
     }

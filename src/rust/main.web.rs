@@ -72,12 +72,19 @@ where
 }
 
 fn push_updates(zvm: &mut Zmachine) {
-    let map = serde_json::to_string(&zvm.get_current_room()).unwrap();
-    let tree = serde_json::to_string(&zvm.get_object_tree()).unwrap();
+    if let Ok(map) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        serde_json::to_string(&zvm.get_current_room()).unwrap()
+    })) {
+        zvm.ui.message("map", &map);
+    }
 
-    zvm.update_status_bar();
-    zvm.ui.message("map", &map);
-    zvm.ui.message("tree", &tree);
+    if let Ok(tree) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        serde_json::to_string(&zvm.get_object_tree()).unwrap()
+    })) {
+        zvm.ui.message("tree", &tree);
+    }
+
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| zvm.update_status_bar()));
 
     if zvm.options.log_instructions {
         zvm.ui.message("instructions", &zvm.instr_log);
