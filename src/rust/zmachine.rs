@@ -1145,6 +1145,26 @@ impl Zmachine {
         true
     }
 
+    fn do_save_undo(&mut self, instr: &Instruction) -> u16 {
+        let location = self
+            .get_object_name_if_valid(self.read_global(0))
+            .unwrap_or_else(|| String::new());
+        let state = self.make_save_state(instr.next);
+        self.undos.push((location, state));
+        self.redos.clear();
+        1
+    }
+
+    fn do_restore_undo(&mut self) -> u16 {
+        if let Some((location, state)) = self.undos.pop() {
+            self.restore_state(state.as_slice());
+            self.current_state = Some((location, state));
+            2
+        } else {
+            0
+        }
+    }
+
     fn get_arguments(&mut self, operands: &[Operand]) -> Vec<u16> {
         operands
             .iter()
@@ -1374,6 +1394,8 @@ impl Zmachine {
             (VAR_255, &[num]) => Some(self.do_check_arg_count(num)),
             (EXT_1002, &[num, places]) => Some(self.do_log_shift(num, places)),
             (EXT_1003, &[num, places]) => Some(self.do_art_shift(num, places)),
+            (EXT_1009, &[]) => Some(self.do_save_undo(instr)),
+            (EXT_1010, &[]) => Some(self.do_restore_undo()),
             _ => None,
         };
 

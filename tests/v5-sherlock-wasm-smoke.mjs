@@ -64,8 +64,10 @@ try {
   instance.exports.step();
   instance.exports.feed(writeCString(' '));
   instance.exports.step();
+  instance.exports.feed(writeCString('wait'));
+  instance.exports.step();
 } catch (err) {
-  console.error('FAIL: Sherlock WASM trapped during initial load/step');
+  console.error('FAIL: Sherlock WASM trapped during initial load/step/wait');
   console.error(err && err.stack || err);
   console.error(printed().slice(-1500));
   process.exit(1);
