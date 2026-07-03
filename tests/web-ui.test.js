@@ -82,7 +82,11 @@ function makeDocument() {
       return new FakeElement(tagName);
     },
     getElementById(id) {
-      if (!elements.has(id)) elements.set(id, new FakeElement('div', id));
+      if (!elements.has(id)) {
+        const element = new FakeElement('div', id);
+        if (id === 'tree-toggle') element.checked = true;
+        elements.set(id, element);
+      }
       return elements.get(id);
     },
     querySelector(selector) {
@@ -146,6 +150,8 @@ function sendMessage(context, type, payload) {
   for (const id of required) {
     assert(html.includes(`id="${id}"`), `missing #${id}`);
   }
+
+  assert(html.includes('id="tree-toggle"'), 'missing #tree-toggle');
 })();
 
 (function testMapMessageRendersCurrentRoom() {
@@ -186,6 +192,16 @@ function sendMessage(context, type, payload) {
   assert(document.getElementById('map-lines').children.length > 0, 'expected a visual map line');
 })();
 
+(function testRunUntilInputOrDoneCallsWasmStepOnce() {
+  const { context } = runPageScript();
+  let steps = 0;
+  context.wasm = { exports: { step: () => { steps += 1; return false; } } };
+
+  context.runUntilInputOrDone();
+
+  assert.strictEqual(steps, 1);
+})();
+
 (function testTreeMessageRendersObjectTree() {
   const { context, document } = runPageScript();
   sendMessage(context, 'tree', JSON.stringify({
@@ -203,6 +219,36 @@ function sendMessage(context, type, payload) {
   assert(text.includes('brass lantern (#1)'));
   assert(text.includes('mailbox (#2)'));
   assert(text.includes('leaflet (#3)'));
+})();
+
+(function testTreeToggleHidesAndStopsUpdatingObjectTree() {
+  const { context, document } = runPageScript();
+  const toggle = document.getElementById('tree-toggle');
+  const panel = document.getElementById('tree-panel');
+  const tree = document.getElementById('object-tree');
+
+  assert.strictEqual(toggle.checked, true);
+  sendMessage(context, 'tree', JSON.stringify({
+    number: 0,
+    name: '(Null Object)',
+    children: [{ number: 1, name: 'brass lantern', children: [] }],
+  }));
+  assert(tree.textContent.includes('brass lantern (#1)'));
+
+  toggle.checked = false;
+  toggle.eventListeners.change();
+  assert.strictEqual(panel.style.display, 'none');
+
+  sendMessage(context, 'tree', JSON.stringify({
+    number: 0,
+    name: '(Null Object)',
+    children: [{ number: 2, name: 'mailbox', children: [] }],
+  }));
+  assert(!tree.textContent.includes('mailbox (#2)'));
+
+  toggle.checked = true;
+  toggle.eventListeners.change();
+  assert.strictEqual(panel.style.display, '');
 })();
 
 console.log('web-ui tests passed');

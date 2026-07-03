@@ -56,6 +56,16 @@
         }
         button { cursor: pointer; }
         button:hover { background: var(--panel-2); }
+        .toggle-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--green);
+            font-size: 12px;
+            font-weight: normal;
+            cursor: pointer;
+        }
+        .toggle-label input { accent-color: var(--green); }
         #input { width: 100%; }
         .error { color: var(--red); }
         .debug { color: var(--muted); }
@@ -84,6 +94,10 @@
             display: flex;
             justify-content: space-between;
             gap: 8px;
+        }
+        .panel-toggle {
+            padding: 8px 10px;
+            background: var(--panel-2);
         }
         .panel-body { padding: 10px; }
         #map-current-room {
@@ -193,6 +207,13 @@
                 </div>
             </section>
 
+            <div class="panel panel-toggle">
+                <label class="toggle-label" title="Enable or disable object tree updates">
+                    <input type="checkbox" id="tree-toggle" checked>
+                    Object tree enabled
+                </label>
+            </div>
+
             <section id="tree-panel" class="panel">
                 <h2><span>Object tree</span></h2>
                 <div class="panel-body">
@@ -213,12 +234,15 @@
         const mapEdges = document.getElementById('map-edges');
         const mapLines = document.getElementById('map-lines');
         const mapClear = document.getElementById('map-clear');
+        const treePanel = document.getElementById('tree-panel');
+        const treeToggle = document.getElementById('tree-toggle');
         const objectTree = document.getElementById('object-tree');
 
         let wasm = null;
         let memory = null;
         let running = false;
         let lastCommand = '';
+        let objectTreeEnabled = true;
 
         const DIRECTIONS = {
             n: 'north', north: 'north',
@@ -420,6 +444,8 @@
         }
 
         function handleTreeMessage(message) {
+            if (!objectTreeEnabled) return;
+
             const tree = JSON.parse(message || '{}');
             objectTree.className = '';
             objectTree.textContent = '';
@@ -451,6 +477,11 @@
             renderMap();
             objectTree.className = 'empty-state';
             objectTree.textContent = 'No object data yet.';
+        }
+
+        function updateTreeToggle() {
+            objectTreeEnabled = treeToggle.checked;
+            treePanel.style.display = objectTreeEnabled ? '' : 'none';
         }
 
         function jsMessage(typePtr, messagePtr) {
@@ -486,19 +517,16 @@
             }
         }
 
-        function runUntilInputOrDone(maxSteps = 20000) {
+        function runUntilInputOrDone() {
             if (!wasm || running) return;
             running = true;
             try {
-                for (let i = 0; i < maxSteps; i++) {
-                    const done = wasm.exports.step();
-                    if (done) {
-                        input.disabled = true;
-                        appendLine('[Story ended]', 'status');
-                        return;
-                    }
+                const done = wasm.exports.step();
+                if (done) {
+                    input.disabled = true;
+                    appendLine('[Story ended]', 'status');
                 }
-                // The interpreter yields by waiting for feed() from JS; avoid locking the browser.
+                // The Rust web step() already runs until input/done; do not loop here.
             } catch (err) {
                 appendLine('Runtime error: ' + err.message, 'error');
                 console.error(err);
@@ -569,6 +597,8 @@
         });
 
         mapClear.addEventListener('click', clearMapButKeepCurrent);
+        treeToggle.addEventListener('change', updateTreeToggle);
+        updateTreeToggle();
         renderMap();
         initWasm();
     </script>
