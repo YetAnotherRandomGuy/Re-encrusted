@@ -1570,8 +1570,8 @@ impl Zmachine {
 
                     return true; // done == true
                 }
-                // READ (breaks loop)
-                Opcode::VAR_228 => {
+                // READ / READ_CHAR (breaks loop)
+                Opcode::VAR_228 | Opcode::VAR_246 => {
                     let state = self.make_save_state(self.pc);
                     self.send_save_message("savestate", &state);
 
@@ -1616,10 +1616,15 @@ impl Zmachine {
             self.undos.push(self.current_state.take().unwrap());
         }
 
-        // explicitly handle read (need to get args first)
-        let args = self.get_arguments(instr.operands.as_slice());
-        self.do_sread_second(args[0], args[1], input);
-        self.pc = instr.next;
+        // explicitly handle read/read_char (need to get args first for read)
+        if instr.opcode == Opcode::VAR_246 {
+            let chr = input.bytes().next().unwrap_or(b'\n') as u16;
+            self.process_result(&instr, chr);
+        } else {
+            let args = self.get_arguments(instr.operands.as_slice());
+            self.do_sread_second(args[0], args[1], input);
+            self.pc = instr.next;
+        }
     }
 
     // Web UI only
