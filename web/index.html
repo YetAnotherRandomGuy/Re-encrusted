@@ -200,6 +200,33 @@
         #object-tree li { margin: 2px 0; }
         #object-tree .object-number { color: var(--muted); }
         .empty-state { color: var(--muted); font-style: italic; }
+        #story-picker {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 10px;
+        }
+        #server-games {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .server-label { color: var(--muted); font-size: 0.9em; }
+        #server-game-select {
+            background: var(--panel);
+            border: 1px solid var(--green);
+            color: var(--green);
+            padding: 4px 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        #server-game-select:disabled { opacity: 0.5; }
+        #btn-load-server {
+            padding: 4px 10px;
+            font-size: 14px;
+        }
+        #btn-load-server:disabled { opacity: 0.3; cursor: default; }
         @media (max-width: 900px) {
             body { padding: 10px; }
             .shell { grid-template-columns: 1fr; }
@@ -213,7 +240,14 @@
         <p class="status">A Z-machine interpreter • WebAssembly edition</p>
     </div>
 
-    <label>Story file (.z3/.z4/.z5/.z8): <input type="file" id="story" accept=".z3,.z4,.z5,.z8,.zblorb,.dat"></label>
+    <div id="story-picker">
+        <label>Local story file (.z3/.z4/.z5/.z8): <input type="file" id="story" accept=".z3,.z4,.z5,.z8,.zblorb,.dat"></label>
+        <span id="server-games">
+            <span class="server-label">Server games:</span>
+            <select id="server-game-select" disabled><option value="">Loading...</option></select>
+            <button id="btn-load-server" type="button" disabled>load</button>
+        </span>
+    </div>
 
     <div class="shell">
         <main class="left-column">
@@ -814,6 +848,11 @@
         story.addEventListener('change', async () => {
             if (!wasm || !story.files.length) return;
             const data = new Uint8Array(await story.files[0].arrayBuffer());
+            await loadStoryData(data, story.files[0].name);
+        });
+
+        async function loadStoryData(data, filename) {
+            if (!wasm) return;
             const ptr = wasm.exports.allocate(data.length);
             new Uint8Array(memory.buffer, ptr, data.length).set(data);
             output.textContent = '';
@@ -828,7 +867,66 @@
             wasm.exports.create(ptr, data.length);
             input.disabled = false;
             input.focus();
+            if (filename) appendLine(`[Loaded ${filename}]`, 'status');
             runUntilInputOrDone();
+        }
+
+        // Server game browsing
+        const serverGameSelect = document.getElementById('server-game-select');
+        const btnLoadServer = document.getElementById('btn-load-server');
+
+        async function fetchServerGames() {
+            try {
+                const resp = await fetch('games/');
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const html = await resp.text();
+                // Parse directory listing for game files
+                const gameExts = /\.(z[3-8]|zblorb|dat)$/i;
+                const games = [];
+                const linkRe = /href="([^"]+)"/g;
+                let m;
+                while ((m = linkRe.exec(html)) !== null) {
+                    let name = decodeURIComponent(m[1]);
+                    // Strip leading path
+                    name = name.split('/').pop();
+                    if (gameExts.test(name) && !name.startsWith('?')) {
+                        games.push(name);
+                    }
+                }
+                games.sort();
+                if (games.length === 0) {
+                    serverGameSelect.innerHTML = '<option value="">No games found</option>';
+                    serverGameSelect.disabled = true;
+                    btnLoadServer.disabled = true;
+                } else {
+                    serverGameSelect.innerHTML = '<option value="">Select a game...</option>' +
+                        games.map(g => `<option value="${g}">${g}</option>`).join('');
+                    serverGameSelect.disabled = false;
+                }
+            } catch (err) {
+                serverGameSelect.innerHTML = '<option value="">No games folder</option>';
+                serverGameSelect.disabled = true;
+                btnLoadServer.disabled = true;
+            }
+        }
+
+        btnLoadServer.addEventListener('click', async () => {
+            if (!wasm) return;
+            const game = serverGameSelect.value;
+            if (!game) return;
+            try {
+                const resp = await fetch('games/' + encodeURIComponent(game));
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = new Uint8Array(await resp.arrayBuffer());
+                await loadStoryData(data, game);
+            } catch (err) {
+                appendLine('Error loading server game: ' + err.message, 'error');
+                console.error(err);
+            }
+        });
+
+        serverGameSelect.addEventListener('change', () => {
+            btnLoadServer.disabled = !serverGameSelect.value || serverGameSelect.disabled;
         });
 
         input.addEventListener('keydown', (e) => {
@@ -862,6 +960,7 @@
         updateTreeToggle();
         renderMap();
         initWasm();
+        fetchServerGames();
     </script>
 </body>
 </html>
