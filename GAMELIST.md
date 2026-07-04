@@ -1,0 +1,35 @@
+This should be the complete list of the Zmachine-style games:
+
+- [Arthur: The Quest for Excalibur](https://en.wikipedia.org/wiki/Arthur:_The_Quest_for_Excalibur) - V6 game, not supported yet
+- [Ballyhoo](https://en.wikipedia.org/wiki/Ballyhoo_\(video_game\))
+- [Beyond Zork](https://en.wikipedia.org/wiki/Beyond_Zork)
+- [Border Zone](https://en.wikipedia.org/wiki/Border_Zone_\(video_game\)) 
+- [Bureaucracy](https://en.wikipedia.org/wiki/Bureaucracy_\(video_game\))
+- [Cutthroats](https://en.wikipedia.org/wiki/Cutthroats_\(video_game\))
+- [Deadline](https://en.wikipedia.org/wiki/Deadline_\(1982_video_game\))
+- [Enchanter](https://en.wikipedia.org/wiki/Enchanter_\(video_game\))
+- [Hollywood Hijinx](https://en.wikipedia.org/wiki/Hollywood_Hijinx)
+- [Infidel](https://en.wikipedia.org/wiki/Infidel)
+- [Journey](https://en.wikipedia.org/wiki/Journey)
+- [Leather Goddesses of Phobos](https://en.wikipedia.org/wiki/Leather_Goddesses_of_Phobos)
+- [The Lurking Horror](https://en.wikipedia.org/wiki/The_Lurking_Horror)
+- [A Mind Forever Voyaging](https://en.wikipedia.org/wiki/A_Mind_Forever_Voyaging)
+- [Moonmist](https://en.wikipedia.org/wiki/Moonmist)
+- [Nord and Bert Couldn't Make Head or Tail of It](https://en.wikipedia.org/wiki/Nord_and_Bert_Couldn't_Make_Head_or_Tail_of_It)
+- [Planetfall](https://en.wikipedia.org/wiki/Planetfall)
+- [Plundered_Hearts](https://en.wikipedia.org/wiki/Plundered_Hearts)
+- [Seastalker](https://en.wikipedia.org/wiki/Seastalker)
+- [Sherlock: The Riddle of the Crown Jewels](https://en.wikipedia.org/wiki/Sherlock:_The_Riddle_of_the_Crown_Jewels) 
+- [Sorcerer](https://en.wikipedia.org/wiki/Sorcerer)
+- [Spellbreaker](https://en.wikipedia.org/wiki/Spellbreaker)
+- [Starcross](https://en.wikipedia.org/wiki/Starcross_\(video_game\))
+- [Stationfall](https://en.wikipedia.org/wiki/Stationfall)
+- [Suspect](https://en.wikipedia.org/wiki/Suspect_\(video_game\))
+- [Suspended](https://en.wikipedia.org/wiki/Suspended_\(video_game\))
+- [Trinity](https://en.wikipedia.org/wiki/Trinity_\(video_game\))
+- [Wishbringer](https://en.wikipedia.org/wiki/Wishbringer)
+- [The Witness](https://en.wikipedia.org/wiki/The_Witness_\(1983_video_game\))
+- [Zork I](https://en.wikipedia.org/wiki/Zork_I) - Supported 
+- [Zork II](https://en.wikipedia.org/wiki/Zork_II) - Supported 
+- [Zork III](https://en.wikipedia.org/wiki/Zork_III) - Supported 
+- [Zork Zero](https://en.wikipedia.org/wiki/Zork_Zero) - V6 game, not supported yet
