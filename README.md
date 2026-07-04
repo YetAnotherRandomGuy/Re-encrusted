@@ -14,7 +14,11 @@ I've changed a few things, like the ability to save and load from a local file, 
 
 Note that this project does NOT cover V6 games - the graphic ones - like zork Zero, Arthur, Journey, and Shogun. 
 
-** Where do I get the games ? **
+### How Do I Run This? 
+
+See HOWTO.MD
+
+### Where do I get the games ?
 
 One nice thing Microsoft did when they bought most of these from Activision was to Open Source the Zork Trilogy: 
 
