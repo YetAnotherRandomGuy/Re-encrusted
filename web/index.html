@@ -74,10 +74,36 @@
         #statusbar {
             display: flex;
             justify-content: space-between;
+            align-items: center;
+            gap: 8px;
             border: 1px solid var(--green);
             border-bottom: 0;
             padding: 6px 10px;
             background: var(--panel-2);
+        }
+        #undo-redo {
+            display: flex;
+            gap: 4px;
+        }
+        #undo-redo button {
+            padding: 2px 10px;
+            font-size: 12px;
+        }
+        #undo-redo button:disabled {
+            opacity: 0.3;
+            cursor: default;
+        }
+        #save-load {
+            display: flex;
+            gap: 4px;
+        }
+        #save-load button {
+            padding: 2px 10px;
+            font-size: 12px;
+        }
+        #save-load button:disabled {
+            opacity: 0.3;
+            cursor: default;
         }
         .panel {
             background: var(--panel);
@@ -191,7 +217,19 @@
 
     <div class="shell">
         <main class="left-column">
-            <div id="statusbar"><span id="status-left"></span><span id="status-right"></span></div>
+            <div id="statusbar">
+                <span id="status-left"></span>
+                <span id="status-right"></span>
+                <span id="undo-redo">
+                    <button id="btn-undo" type="button" title="Undo (Ctrl+Z)" disabled>◀ undo</button>
+                    <button id="btn-redo" type="button" title="Redo (Ctrl+Shift+Z)" disabled>redo ▶</button>
+                </span>
+                <span id="save-load">
+                    <button id="btn-save" type="button" title="Save game to file" disabled>save</button>
+                    <button id="btn-load" type="button" title="Load game from file" disabled>load</button>
+                    <input type="file" id="load-file" accept=".sav,.sav5,.qzl" style="display:none">
+                </span>
+            </div>
             <div id="output">Loading WebAssembly module...</div>
             <input type="text" id="input" placeholder="Load a story file, then type commands here..." disabled>
         </main>
@@ -211,8 +249,8 @@
 
             <div class="panel panel-toggle">
                 <label class="toggle-label" title="Enable or disable object tree updates">
-                    <input type="checkbox" id="tree-toggle" checked>
-                    Object tree enabled
+                    <input type="checkbox" id="tree-toggle">
+                    Object tree disabled
                 </label>
             </div>
 
@@ -239,12 +277,19 @@
         const treePanel = document.getElementById('tree-panel');
         const treeToggle = document.getElementById('tree-toggle');
         const objectTree = document.getElementById('object-tree');
+        const btnUndo = document.getElementById('btn-undo');
+        const btnRedo = document.getElementById('btn-redo');
+        const btnSave = document.getElementById('btn-save');
+        const btnLoad = document.getElementById('btn-load');
+        const loadFile = document.getElementById('load-file');
 
         let wasm = null;
         let memory = null;
         let running = false;
         let lastCommand = '';
         let objectTreeEnabled = true;
+        let moveCount = 0;
+        let redoCount = 0;
 
         // Map zoom state (adapted from encrusted D3Map d3.behavior.zoom)
         let mapScale = 1;
@@ -637,8 +682,100 @@
                 console.error(err);
             } finally {
                 running = false;
+                updateUndoRedoButtons();
             }
         }
+
+        function updateUndoRedoButtons() {
+            if (!wasm) return;
+            // Enable buttons based on whether undo/redo have state available.
+            // We just try them cheaply: the Rust side returns false if nothing
+            // to undo/redo. But we don't want to actually undo on a probe.
+            // Instead, track move count client-side.
+            btnUndo.disabled = moveCount === 0;
+            btnRedo.disabled = redoCount === 0;
+        }
+
+        function doUndo() {
+            if (!wasm || running) return;
+            if (moveCount === 0) return;
+            try {
+                const ok = wasm.exports.undo();
+                if (ok) {
+                    moveCount--;
+                    redoCount++;
+                    appendLine('[undo]', 'status');
+                }
+            } catch (err) {
+                appendLine('Undo error: ' + err.message, 'error');
+            }
+            updateUndoRedoButtons();
+        }
+
+        function doRedo() {
+            if (!wasm || running) return;
+            if (redoCount === 0) return;
+            try {
+                const ok = wasm.exports.redo();
+                if (ok) {
+                    moveCount++;
+                    redoCount--;
+                    appendLine('[redo]', 'status');
+                }
+            } catch (err) {
+                appendLine('Redo error: ' + err.message, 'error');
+            }
+            updateUndoRedoButtons();
+        }
+
+        function doSave() {
+            if (!wasm) return;
+            try {
+                const ptr = wasm.exports.save_game();
+                const len = wasm.exports.get_save_len();
+                const bytes = new Uint8Array(memory.buffer, ptr, len).slice();
+                // Free the WASM-side buffer
+                wasm.exports.deallocate(ptr, len);
+
+                // Offer as a download to the user's browser
+                const blob = new Blob([bytes], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'encrusted-save.sav';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                appendLine('[saved to file]', 'status');
+            } catch (err) {
+                appendLine('Save error: ' + err.message, 'error');
+                console.error(err);
+            }
+        }
+
+        function doLoad() {
+            if (!wasm) return;
+            loadFile.click();
+        }
+
+        loadFile.addEventListener('change', async () => {
+            if (!wasm || !loadFile.files.length) return;
+            try {
+                const data = new Uint8Array(await loadFile.files[0].arrayBuffer());
+                // Copy bytes into WASM memory, then call load_game
+                const ptr = wasm.exports.allocate(data.length);
+                new Uint8Array(memory.buffer, ptr, data.length).set(data);
+                wasm.exports.load_game(ptr, data.length);
+                appendLine('[loaded from file]', 'status');
+                // After restoring state, push UI updates so panels reflect new state
+                wasm.exports.get_updates();
+            } catch (err) {
+                appendLine('Load error: ' + err.message, 'error');
+                console.error(err);
+            }
+            loadFile.value = '';
+        });
 
         async function initWasm() {
             try {
@@ -683,6 +820,11 @@
             statusLeft.textContent = '';
             statusRight.textContent = '';
             resetLivePanels();
+            moveCount = 0;
+            redoCount = 0;
+            updateUndoRedoButtons();
+            btnSave.disabled = false;
+            btnLoad.disabled = false;
             wasm.exports.create(ptr, data.length);
             input.disabled = false;
             input.focus();
@@ -690,6 +832,13 @@
         });
 
         input.addEventListener('keydown', (e) => {
+            // Ctrl+Z = undo, Ctrl+Shift+Z = redo
+            if (e.ctrlKey && e.key === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) doRedo();
+                else doUndo();
+                return;
+            }
             if (e.key !== 'Enter' || input.disabled) return;
             const command = input.value.trim();
             if (!command) return;
@@ -698,8 +847,15 @@
             const [ptr] = writeCString(command);
             wasm.exports.feed(ptr);
             input.value = '';
+            moveCount++;
+            redoCount = 0;
             runUntilInputOrDone();
         });
+
+        btnUndo.addEventListener('click', doUndo);
+        btnRedo.addEventListener('click', doRedo);
+        btnSave.addEventListener('click', doSave);
+        btnLoad.addEventListener('click', doLoad);
 
         mapClear.addEventListener('click', clearMapButKeepCurrent);
         treeToggle.addEventListener('change', updateTreeToggle);

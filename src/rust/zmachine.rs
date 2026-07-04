@@ -1722,6 +1722,18 @@ impl Zmachine {
 
     // Web UI only
     #[allow(dead_code)]
+    pub fn save_to_bytes(&self) -> Vec<u8> {
+        self.make_save_state(self.pc)
+    }
+
+    // Web UI only
+    #[allow(dead_code)]
+    pub fn load_from_bytes(&mut self, data: &[u8]) {
+        self.restore_state(data);
+    }
+
+    // Web UI only
+    #[allow(dead_code)]
     pub fn restore(&mut self, data: &str) {
         let state = base64::decode(&data);
 

@@ -148,6 +148,42 @@ pub fn redo() -> bool {
     with(|zvm| zvm.redo())
 }
 
+// Save current game state to a Quetzal .sav byte buffer.
+// Returns a pointer to the allocated buffer; call get_save_len() for the size.
+// JS must copy the bytes out before calling any other WASM function.
+static mut SAVE_LEN: usize = 0;
+
+#[no_mangle]
+pub fn save_game() -> *mut u8 {
+    with(|zvm| {
+        let state = zvm.save_to_bytes();
+        let len = state.len();
+        let mut boxed = state.into_boxed_slice();
+        let ptr = boxed.as_mut_ptr();
+        std::mem::forget(boxed);
+        unsafe {
+            SAVE_LEN = len;
+        }
+        ptr
+    })
+}
+
+#[no_mangle]
+pub fn get_save_len() -> usize {
+    unsafe { SAVE_LEN }
+}
+
+// Load a Quetzal .sav byte buffer into the VM.
+// Does NOT process a restore result (the game isn't at a read instruction);
+// use this for manual save/load from the UI.
+#[no_mangle]
+pub fn load_game(ptr: *mut u8, len: usize) {
+    let data = unsafe { Vec::from_raw_parts(ptr, len, len) };
+    with(|zvm| {
+        zvm.load_from_bytes(data.as_slice());
+    });
+}
+
 #[no_mangle]
 pub fn enable_instruction_logs(enabled: bool) {
     with(|zvm| zvm.options.log_instructions = enabled);
