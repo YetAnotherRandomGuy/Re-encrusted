@@ -1,87 +1,34 @@
-<!-- <img src="https://demille.github.io/encrusted/src/img/name.svg" alt="encrusted" width="200px" height="78px" align="left" /> 
+So a while ago, I found https://sterlingdemille.com/encrusted , a online Z-machine/emulator, with a neat twist: it mapped your journey for you. The author added some other things which are likely cool (like dictation), but I didn't use. At some point, I tried loading Hitchhiker's Guide to the Galaxy, and it crashed... to learn it didn't really implement a "complete" emulator. 
 
-<p align="right">
-  <img src="https://img.shields.io/crates/v/encrusted.svg" alt="Crates.io" align="right" />
-  <br/>
-  <a href="https://travis-ci.org/DeMille/encrusted">
-    <img src="https://travis-ci.org/DeMille/encrusted.svg?branch=master" alt="Built Status" align="right" />
-  </a>
-</p>
-<br/>
--->
+Now fast forward to today, where I need some Agentic Coding tests ... and figuring I'll burn a bunch of tokens (I'm at about $300 as of this release) I might as well make something I can share with the community for the cost. 
 
-Forked from https://github.com/demille/encrusted
-
-This is an agentic AI test: As I am both a Rust and W/A n00b, the goal here is to use various LLM models to :
+So... this project was born. While I have passing knowledge of Rust, the goal here was to not ever touch the code, and let my agents do it (I've used various LLMs as benchmarks against each other for various parts). We needed to do a bunch of things to make me warm and fuzzy, such as : 
 
 - Update the code to a "modern" Rust toolchain
 - Build an example of how to use the W/A output in a web page
 - Add support for later versions of the Zcode interpreter (excluding V6, the graphical games like Zork 0, Arthur, etc)
 
----
+Of course, since we are basically creating AI slop with numerous supply chain injection opportunities, I wanted to throw some security around it and get it to run in a container. In reality, the end output of a WASM target executable plus a tech-readable single .HTML file is pretty harmless (e.g. the HTML is auditable and WASM is a pretty locked down enclave). But... the container creation is there if you wanted to drop this into your own server via your orchestration of choice. No NPM needs like the original. 
 
-#### A z-machine (interpreter) for Infocom-era text adventure games like Zork
+I've changed a few things, like the ability to save and load from a local file, and the mapping interactions got broken (and fixed) a number of times when adding support for later Zmachine formats. To that effect, I added more test cases based on the "real" games - some of which will require files not part of the archive. 
 
-Runs in a web interface or directly in a terminal.
-Built with Rust and WebAssembly (`wasm32-unknown-unknown`).
+Note that this project does NOT cover V6 games - the graphic ones - like zork Zero, Arthur, Journey, and Shogun. 
 
-🎮 &nbsp;[Launch the web player][web]
+** Where do I get the games ? **
 
-<br/>
+One nice thing Microsoft did when they bought most of these from Activision was to Open Source the Zork Trilogy: 
 
-**Features**
-- [x] Live mapping to keep track of where you are
-- [x] Undo / Redo support
-- [x] Narration / Dictation using the [web speech APIs][APIs]
-- [x] Object tree inspector
+https://opensource.microsoft.com/blog/2025/11/20/preserving-code-that-shaped-generations-zork-i-ii-and-iii-go-open-source/
 
-[web]: https://sterlingdemille.com/encrusted
-[APIs]: https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API
+The rest of the games... [are out there](https://eblong.com/infocom/)
 
+Manuals too: https://www.ifwiki.org/Infocom_games
 
-### Install
-Terminal version:
-
-```sh
-cargo install encrusted --bin encrusted
-```
-
-Run a file with `encrusted <FILE>`.
-Use `$undo` and `$redo` to step through your move history.
-Use `save` and `restore` to save your progress.
-
-
-### Build
-WebAssembly/React web version (requires node & rust nightly):
-
-```sh
-# If you haven't added nightly or the wasm32 target:
-rustup toolchain install nightly
-rustup target add wasm32-unknown-unknown --toolchain nightly
-
-# Runs webpack dev server on port 8000
-npm run dev
-
-# Build .wasm module with rust nightly, debug mode
-npm run build:debug
-
-# Or build all in release mode & bundle JS into the ./build directory
-npm run release
-```
-
-
-### Tests
-
-Run z-machine tests ([czech](https://inform-fiction.org/zmachine/standards/z1point1/appc.html) & [praxix](https://inform-fiction.org/zmachine/standards/z1point1/appc.html)) through [regtest](https://eblong.com/zarf/plotex/regtest.html):
-```
-npm run test
-```
-
+I will likely be dead in the ground long before I play all of them end to end, just to make sure there isn't something missing... but I've started a list in GAMELIST.md of what I've played. 
 
 ### Notes
-- Currently only supports v3 zcode files
 - Saves games in the Quetzal format
 
 
 ### License
-MIT
+MIT license retained from the original; covers my derivations as well. Enjoy. 
