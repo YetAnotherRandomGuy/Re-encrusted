@@ -146,6 +146,8 @@
             text-align: center;
             font-size: 12px;
             white-space: normal;
+            cursor: move;
+            user-select: none;
         }
         .map-room.current {
             border-color: var(--yellow);
@@ -244,6 +246,11 @@
         let lastCommand = '';
         let objectTreeEnabled = true;
 
+        // Map zoom state (adapted from encrusted D3Map d3.behavior.zoom)
+        let mapScale = 1;
+        let mapTranslateX = 0;
+        let mapTranslateY = 0;
+
         const DIRECTIONS = {
             n: 'north', north: 'north',
             s: 'south', south: 'south',
@@ -269,6 +276,57 @@
             edges: new Map(),
             current: null,
         };
+
+        function applyMapTransform() {
+            const el = document.getElementById('map-rooms');
+            const lines = document.getElementById('map-lines');
+            const transform = `translate(${mapTranslateX}px, ${mapTranslateY}px) scale(${mapScale})`;
+            el.style.transform = transform;
+            lines.style.transform = transform;
+        }
+
+        // Mouse-wheel zoom, adapted from encrusted D3Map d3.behavior.zoom().scaleExtent([0.3, 1.5])
+        const mapCanvas = document.getElementById('map-canvas');
+        mapCanvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const rect = mapCanvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            const oldScale = mapScale;
+            const delta = e.deltaY < 0 ? 1.1 : 0.9;
+            mapScale = Math.max(0.3, Math.min(1.5, mapScale * delta));
+
+            // Zoom toward cursor: adjust translate so the point under the
+            // cursor stays fixed.
+            const ratio = mapScale / oldScale;
+            mapTranslateX = mx - (mx - mapTranslateX) * ratio;
+            mapTranslateY = my - (my - mapTranslateY) * ratio;
+            applyMapTransform();
+        });
+
+        // Drag-to-pan: click and drag empty canvas area to scroll the map.
+        // (Room elements call stopPropagation on mousedown so dragging a
+        // room doesn't pan.)
+        mapCanvas.addEventListener('mousedown', (e) => {
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const origTX = mapTranslateX;
+            const origTY = mapTranslateY;
+            mapCanvas.style.cursor = 'grabbing';
+            const onMove = (ev) => {
+                mapTranslateX = origTX + (ev.clientX - startX);
+                mapTranslateY = origTY + (ev.clientY - startY);
+                applyMapTransform();
+            };
+            const onUp = () => {
+                mapCanvas.style.cursor = '';
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
 
         function appendLine(text, className = '') {
             const line = document.createElement('div');
@@ -328,8 +386,7 @@
         function addEdge(from, to, direction) {
             if (!from || !to || !direction || from.id === to.id) return;
             const key = `${from.id}->${to.id}`;
-            const reverseKey = `${to.id}->${from.id}`;
-            const existing = graph.edges.get(key) || graph.edges.get(reverseKey);
+            const existing = graph.edges.get(key);
             if (existing) {
                 if (!existing.directions.includes(direction)) existing.directions.push(direction);
                 return;
@@ -363,6 +420,7 @@
                 el.className = `map-room${graph.current.id === room.id ? ' current' : ''}`;
                 el.style.left = `${room.x + shiftX}px`;
                 el.style.top = `${room.y + shiftY}px`;
+                el.dataset.roomId = room.id;
 
                 const name = document.createElement('div');
                 name.textContent = room.name;
@@ -371,6 +429,27 @@
                 number.textContent = `#${room.id}`;
                 el.appendChild(name);
                 el.appendChild(number);
+
+                // Drag to reposition (adapted from encrusted/src/js/Rooms.js D3Map._drag)
+                el.addEventListener('mousedown', (ev) => {
+                    ev.stopPropagation();
+                    const startX = ev.clientX;
+                    const startY = ev.clientY;
+                    const origX = room.x;
+                    const origY = room.y;
+                    const onMove = (e) => {
+                        room.x = Math.round((origX + (e.clientX - startX)) * 100) / 100;
+                        room.y = Math.round((origY + (e.clientY - startY)) * 100) / 100;
+                        renderMap();
+                    };
+                    const onUp = () => {
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    };
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
+                });
+
                 mapRooms.appendChild(el);
             }
 
@@ -392,6 +471,32 @@
                 line.style.width = `${length}px`;
                 line.style.transform = `rotate(${angle}deg)`;
                 mapLines.appendChild(line);
+
+                // Direction label: offset perpendicular to the line so
+                // forward/reverse edges don't overlap. Arrow points toward
+                // the destination box (rotated with the line).
+                const reverseKey = `${edge.to}->${edge.from}`;
+                const hasReverse = graph.edges.has(reverseKey);
+                const perpOffset = hasReverse ? 10 : 0;
+
+                const mx = (x1 + x2) / 2;
+                const my = (y1 + y2) / 2;
+                const nx = -Math.sin(angle * Math.PI / 180) * perpOffset;
+                const ny = Math.cos(angle * Math.PI / 180) * perpOffset;
+
+                const label = document.createElement('div');
+                label.style.position = 'absolute';
+                label.style.left = `${mx - 40 + nx}px`;
+                label.style.top = `${my - 8 + ny}px`;
+                label.style.width = '80px';
+                label.style.textAlign = 'center';
+                label.style.fontSize = '9px';
+                label.style.color = 'var(--dim-green)';
+                label.style.pointerEvents = 'none';
+                label.style.transform = `rotate(${angle}deg)`;
+                label.style.transformOrigin = 'center center';
+                label.textContent = `${edge.directions.join(', ')} →`;
+                mapLines.appendChild(label);
             }
 
             if (!edgeList.length) {
